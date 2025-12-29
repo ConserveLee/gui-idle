@@ -84,7 +84,7 @@ func NewToolsPanel(win fyne.Window) fyne.CanvasObject {
 		cropBtn,
 		layoutSpacer(),
 		widget.NewSeparator(),
-		openDirBtn,
+	openDirBtn,
 	)
 
 	return content
@@ -147,7 +147,7 @@ func showCropperWindow(parent fyne.Window, fullImg image.Image) {
 		
 		finalImg := subImg.SubImage(currentSelection)
 		
-		// Show Save Dialog
+		// Show Save Dialog Logic
 		showSaveForm(w, finalImg)
 	}
 
@@ -171,15 +171,27 @@ func showSaveForm(win fyne.Window, img image.Image) {
 	// Form
 	// Mapping friendly names to paths
 	dirMap := map[string]string{
-		"环球远征": "assets/global_targets",
-		"普通关卡": "assets/normal_targets",
+		"环球远征 - 进图 (Entry)":        "assets/global_targets/entry",
+		"环球远征 - 进图验证 (Entry Verify)": "assets/global_targets/entry/verify",
+		"环球远征 - 退出 (Exit)":         "assets/global_targets/exit",
+		"环球远征 - 搜索1 (打开列表)":      "assets/global_targets/search/step1",
+		"环球远征 - 搜索2 (选择频道)":      "assets/global_targets/search/step2",
+		"环球远征 - 搜索3 (验证高亮)":      "assets/global_targets/search/verify",
+		"普通关卡":                     "assets/normal_targets",
 	}
 	// Sorted keys for consistent UI order
-	dirOptions := []string{"环球远征", "普通关卡"} 
+	dirOptions := []string{
+		"环球远征 - 进图 (Entry)",
+		"环球远征 - 进图验证 (Entry Verify)",
+		"环球远征 - 退出 (Exit)", 
+		"环球远征 - 搜索1 (打开列表)",
+		"环球远征 - 搜索2 (选择频道)",
+		"环球远征 - 搜索3 (验证高亮)",
+		"普通关卡",
+	}
 	
-	dirSelect := widget.NewSelect(dirOptions, nil)
+dirSelect := widget.NewSelect(dirOptions, nil)
 	
-	// Filename input
 	nameEntry := widget.NewEntry()
 
 	// Helper to update filename based on selection
@@ -191,8 +203,9 @@ func showSaveForm(win fyne.Window, img image.Image) {
 		// Ensure dir exists
 		os.MkdirAll(realDir, 0755)
 		
-		next := getNextIndex(realDir)
-		nameEntry.SetText(fmt.Sprintf("%d.png", next))
+		isEntry := strings.Contains(realDir, "global_targets/entry")
+		nextName := getNextFileName(realDir, isEntry)
+		nameEntry.SetText(nextName)
 	}
 
 	dirSelect.OnChanged = func(s string) {
@@ -201,14 +214,13 @@ func showSaveForm(win fyne.Window, img image.Image) {
 	
 	// Init default
 	dirSelect.SetSelected(dirOptions[0]) 
-	// SetSelected triggers OnChanged, so updateName runs automatically
 
 	content := container.NewVBox(
 		widget.NewLabel("确认保存此素材?"),
 		container.NewCenter(imageObj),
 		widget.NewLabel("保存至 (Target Feature):"),
 		dirSelect,
-		widget.NewLabel("文件名 (Next Sequence):"),
+		widget.NewLabel("文件名 (Suggestion):"),
 		nameEntry,
 	)
 
@@ -234,7 +246,7 @@ func showSaveForm(win fyne.Window, img image.Image) {
 			return
 		}
 		
-		f, err := os.Create(targetPath)
+f, err := os.Create(targetPath)
 		if err != nil {
 			dialog.ShowError(err, win)
 			return
@@ -247,22 +259,54 @@ func showSaveForm(win fyne.Window, img image.Image) {
 		}
 		
 		dialog.ShowInformation("成功", fmt.Sprintf("已保存: %s\n(%s)", targetName, friendlyName), win)
-		win.Close() // Close cropper window on success
+		win.Close() 
 	}, win)
 }
 
-// getNextIndex finds the next available number for *.png in dir
-func getNextIndex(dir string) int {
+// getNextFileName calculates the suggested filename
+func getNextFileName(dir string, decrement bool) string {
 	files, _ := filepath.Glob(filepath.Join(dir, "*.png"))
+	
+	// If empty, default start
+	if len(files) == 0 {
+		if decrement {
+			return "20.png" // Start high for entry
+		}
+		return "1.png"
+	}
+
 	maxIdx := 0
+	foundNum := false
+	
 	for _, f := range files {
 		base := filepath.Base(f)
 		name := strings.TrimSuffix(base, filepath.Ext(base))
-		if idx, err := strconv.Atoi(name); err == nil {
-			if idx > maxIdx {
-				maxIdx = idx
+		// Handle "20-11" -> parse "20"
+		parts := strings.FieldsFunc(name, func(r rune) bool {
+			return r < '0' || r > '9'
+		})
+		
+		if len(parts) > 0 {
+			if idx, err := strconv.Atoi(parts[0]); err == nil {
+				if idx > maxIdx {
+					maxIdx = idx
+					foundNum = true
+				}
 			}
 		}
 	}
-	return maxIdx + 1
+	
+	if !foundNum {
+		if decrement { return "20.png" }
+		return "1.png"
+	}
+
+	if decrement {
+		if maxIdx > 1 {
+			return fmt.Sprintf("%d.png", maxIdx-1)
+		}
+		return "1.png" 
+	}
+	
+	return fmt.Sprintf("%d.png", maxIdx+1)
 }

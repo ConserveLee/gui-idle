@@ -16,9 +16,14 @@ It uses **Fyne** for the GUI, **kbinani/screenshot** for multi-monitor screen ca
     - `engine/`: Core Automation Engine (`Bot` struct, Event Loop).
     - `engine/screen/`: Vision & Screenshot wrappers.
     - `logger/`: UI Logging system.
+    - `constants/`: Shared constants.
 - `assets/`: Resources.
     - `global_targets/`: Images for Global Expedition.
     - `capture.png`: Temporary debug screenshot.
+
+## Coding Rules (Strict)
+1. **NO 'replace' Tool**: Do not use the `replace` tool for editing files. It is unreliable for large files or complex contexts. **ALWAYS use `write_file` to rewrite the entire file content** when making changes.
+2. **Constants**: Use `internal/constants` for magic numbers (delays, intervals).
 
 ## Building and Running
 

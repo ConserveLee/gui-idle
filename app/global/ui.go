@@ -2,7 +2,6 @@ package global
 
 import (
 	"fmt"
-	"github.com/ConserveLee/gui-idle/internal/engine"
 	"github.com/ConserveLee/gui-idle/internal/logger"
 
 	"github.com/kbinani/screenshot"
@@ -27,9 +26,10 @@ func NewGlobalExpeditionPanel() fyne.CanvasObject {
 	statusCallback := func(msg string) { statusData.Set(msg) }
 	debugCallback := func(format string, args ...interface{}) { appLogger.Debug(format, args...) }
 
-	// Note: We need to update BotConfig to point to the new assets location
-	gameBot := engine.NewBot(logCallback, statusCallback, debugCallback)
-	gameBot.Config.AssetsDir = "assets/global_targets" // Override default path
+	// Use specific GlobalBot instead of generic engine.Bot
+	gameBot := NewGlobalBot(logCallback, statusCallback, debugCallback)
+
+	// --- UI Components ---
 
 	// --- UI Components ---
 	

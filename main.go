@@ -12,7 +12,7 @@ import (
 
 func main() {
 	myApp := app.New()
-	myWindow := myApp.NewWindow("Go Game Bot Toolset")
+	myWindow := myApp.NewWindow("zombie-idle")
 	myWindow.Resize(fyne.NewSize(500, 600))
 
 	// Create tabs for different features
