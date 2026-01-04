@@ -171,22 +171,26 @@ func showSaveForm(win fyne.Window, img image.Image) {
 	// Form
 	// Mapping friendly names to paths
 	dirMap := map[string]string{
-		"环球远征 - 进图 (Entry)":        "assets/global_targets/entry",
-		"环球远征 - 进图验证 (Entry Verify)": "assets/global_targets/entry/verify",
-		"环球远征 - 退出 (Exit)":         "assets/global_targets/exit",
-		"环球远征 - 搜索1 (打开列表)":      "assets/global_targets/search/step1",
-		"环球远征 - 搜索2 (选择频道)":      "assets/global_targets/search/step2",
-		"环球远征 - 搜索3 (验证高亮)":      "assets/global_targets/search/verify",
+		"找游戏 - 游戏入口 (Games)":     "assets/global_targets/find_game/games",
+		"找游戏 - 界面特征 (Finding)":   "assets/global_targets/find_game",
+		"等待中 - 大厅特征 (Lobby)":     "assets/global_targets/waiting",
+		"游戏中 - 技能图标 (Skill)":     "assets/global_targets/in_game",
+		"游戏中 - 退出按钮 (Exit)":      "assets/global_targets/in_game",
+		"频道选择 - 返回按钮 (Return)":   "assets/global_targets/channel",
+		"频道选择 - 打开列表 (Open)":     "assets/global_targets/channel",
+		"频道选择 - 选择频道 (Select)":   "assets/global_targets/channel",
 		"普通关卡":                     "assets/normal_targets",
 	}
 	// Sorted keys for consistent UI order
 	dirOptions := []string{
-		"环球远征 - 进图 (Entry)",
-		"环球远征 - 进图验证 (Entry Verify)",
-		"环球远征 - 退出 (Exit)", 
-		"环球远征 - 搜索1 (打开列表)",
-		"环球远征 - 搜索2 (选择频道)",
-		"环球远征 - 搜索3 (验证高亮)",
+		"找游戏 - 游戏入口 (Games)",
+		"找游戏 - 界面特征 (Finding)",
+		"等待中 - 大厅特征 (Lobby)",
+		"游戏中 - 技能图标 (Skill)",
+		"游戏中 - 退出按钮 (Exit)",
+		"频道选择 - 返回按钮 (Return)",
+		"频道选择 - 打开列表 (Open)",
+		"频道选择 - 选择频道 (Select)",
 		"普通关卡",
 	}
 	
@@ -202,10 +206,31 @@ dirSelect := widget.NewSelect(dirOptions, nil)
 		}
 		// Ensure dir exists
 		os.MkdirAll(realDir, 0755)
-		
-		isEntry := strings.Contains(realDir, "global_targets/entry")
-		nextName := getNextFileName(realDir, isEntry)
-		nameEntry.SetText(nextName)
+
+		// Special handling for different target types
+		switch friendlyName {
+		case "找游戏 - 游戏入口 (Games)":
+			// Games use high priority numbers (20, 19, 18...)
+			nextName := getNextFileName(realDir, true)
+			nameEntry.SetText(nextName)
+		case "找游戏 - 界面特征 (Finding)":
+			nameEntry.SetText("finding.png")
+		case "等待中 - 大厅特征 (Lobby)":
+			nameEntry.SetText("lobby.png")
+		case "游戏中 - 技能图标 (Skill)":
+			nameEntry.SetText("skill.png")
+		case "游戏中 - 退出按钮 (Exit)":
+			nameEntry.SetText("exit.png")
+		case "频道选择 - 返回按钮 (Return)":
+			nameEntry.SetText("return.png")
+		case "频道选择 - 打开列表 (Open)":
+			nameEntry.SetText("open.png")
+		case "频道选择 - 选择频道 (Select)":
+			nameEntry.SetText("select.png")
+		default:
+			nextName := getNextFileName(realDir, false)
+			nameEntry.SetText(nextName)
+		}
 	}
 
 	dirSelect.OnChanged = func(s string) {

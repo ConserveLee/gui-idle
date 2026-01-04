@@ -37,6 +37,9 @@ type EntityTracker struct {
 	// ROI (Region of Interest) for fast detection
 	lastHighPriEntity *DetectedEntity // Last detected high priority entity
 	roiMargin         int             // Margin around last position for ROI (default: 100px)
+
+	// Debug callback
+	debugFunc func(string, ...interface{})
 }
 
 // NewEntityTracker creates a new tracker with default settings
@@ -48,7 +51,13 @@ func NewEntityTracker() *EntityTracker {
 		positionThresh: 20,
 		ttl:            2 * time.Second,
 		roiMargin:      100, // 100px margin around last high priority entity
+		debugFunc:      func(string, ...interface{}) {}, // No-op by default
 	}
+}
+
+// SetDebugFunc sets the debug logging function
+func (t *EntityTracker) SetDebugFunc(f func(string, ...interface{})) {
+	t.debugFunc = f
 }
 
 // entityKey generates a unique key for an entity based on priority and position
@@ -80,12 +89,17 @@ func (t *EntityTracker) Update(detected []DetectedEntity) {
 			// Exact match - update position and time
 			existing.LastSeen = now
 			existing.Entity = d
+			t.debugFunc("[Tracker] Exact match: %s at (%d,%d) key=%s clicks=%d",
+				d.TemplateName, d.Position.X, d.Position.Y, key, existing.ClickCount)
 		} else {
 			// No exact match - check if this is an existing entity that moved up
 			matchedKey := t.findMovedEntity(d)
 			if matchedKey != "" {
 				// Found a matching entity that moved - transfer its state
 				oldEntity := t.entities[matchedKey]
+				t.debugFunc("[Tracker] Moved entity: %s (%d,%d)->(%d,%d) clicks=%d oldKey=%s newKey=%s",
+					d.TemplateName, oldEntity.Entity.Position.X, oldEntity.Entity.Position.Y,
+					d.Position.X, d.Position.Y, oldEntity.ClickCount, matchedKey, key)
 				t.entities[key] = &TrackedEntity{
 					Entity:     d,
 					ClickCount: oldEntity.ClickCount,
@@ -96,11 +110,14 @@ func (t *EntityTracker) Update(detected []DetectedEntity) {
 				if _, blacklisted := t.blacklist[matchedKey]; blacklisted {
 					t.blacklist[key] = t.blacklist[matchedKey]
 					delete(t.blacklist, matchedKey)
+					t.debugFunc("[Tracker] Transferred blacklist status to new key")
 				}
 				delete(t.entities, matchedKey)
 				seen[key] = true
 			} else {
 				// Truly new entity
+				t.debugFunc("[Tracker] New entity: %s at (%d,%d) key=%s (existing entities: %d)",
+					d.TemplateName, d.Position.X, d.Position.Y, key, len(t.entities))
 				t.entities[key] = &TrackedEntity{
 					Entity:     d,
 					ClickCount: 0,
@@ -114,6 +131,8 @@ func (t *EntityTracker) Update(detected []DetectedEntity) {
 	// Remove expired entities (not seen for TTL)
 	for key, tracked := range t.entities {
 		if !seen[key] && now.Sub(tracked.LastSeen) > t.ttl {
+			t.debugFunc("[Tracker] Expired entity: %s key=%s clicks=%d",
+				tracked.Entity.TemplateName, key, tracked.ClickCount)
 			delete(t.entities, key)
 		}
 	}

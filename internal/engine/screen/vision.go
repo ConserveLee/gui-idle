@@ -3,28 +3,52 @@ package screen
 import (
 	"fmt"
 	"image"
-	_ "image/png" // Register PNG decoder for image.Decode
+	"image/png"
 	"math"
 	"os"
 
+	"github.com/ConserveLee/gui-idle/internal/constants"
 	"github.com/kbinani/screenshot"
 )
 
 // Searcher handles screen capturing and template matching
-type Searcher struct{
+type Searcher struct {
 	DisplayIndex int
+	debugFunc    func(string, ...interface{})
 }
 
 // NewSearcher creates a new instance
 func NewSearcher() *Searcher {
 	return &Searcher{
 		DisplayIndex: 0, // Default to main display
+		debugFunc:    func(string, ...interface{}) {}, // No-op by default
 	}
+}
+
+// SetDebugFunc sets the debug logging function
+func (s *Searcher) SetDebugFunc(f func(string, ...interface{})) {
+	s.debugFunc = f
 }
 
 // SetDisplayID sets the target display index for capturing
 func (s *Searcher) SetDisplayID(index int) {
 	s.DisplayIndex = index
+}
+
+// SaveDebugScreenshot saves the current screen to a file for debugging
+func (s *Searcher) SaveDebugScreenshot(filename string) error {
+	img, err := s.CaptureScreen()
+	if err != nil {
+		return err
+	}
+
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return png.Encode(f, img)
 }
 
 // LoadImage loads an image from the filesystem
@@ -122,7 +146,9 @@ func (s *Searcher) FindAllTemplatesInROI(screenImg, templateImg image.Image, roi
 			}
 
 			// Full check
-			if match(screenImg, templateImg, x, y, tolerance, getRgbAndAlpha) {
+			result := match(screenImg, templateImg, x, y, tolerance, getRgbAndAlpha)
+			if result.matched {
+				s.debugFunc("[Match ROI] at (%d,%d) failRate=%.2f%% maxDiff=%.1f", x, y, result.failRate*100, result.maxDiff)
 				matches = append(matches, image.Point{X: x, Y: y})
 				x += tWidth / 2
 			}
@@ -180,8 +206,10 @@ func (s *Searcher) FindAllTemplates(screenImg, templateImg image.Image, toleranc
 			}
 
 			// Full check
-			if match(screenImg, templateImg, x, y, tolerance, getRgbAndAlpha) {
-				// NOTE: Returns raw x,y (as requested in rollback)
+			result := match(screenImg, templateImg, x, y, tolerance, getRgbAndAlpha)
+			if result.matched {
+				// Log match quality for debugging
+				s.debugFunc("[Match] at (%d,%d) failRate=%.2f%% maxDiff=%.1f", x, y, result.failRate*100, result.maxDiff)
 				matches = append(matches, image.Point{X: x, Y: y})
 				x += tWidth / 2
 			}
@@ -197,24 +225,55 @@ func colorSimilar(r1, g1, b1, r2, g2, b2 uint32, tolerance float64) bool {
 	return diff <= tolerance
 }
 
-func match(screenImg, templateImg image.Image, sx, sy int, tolerance float64, getRgbAndAlpha func(image.Image, int, int) (uint32, uint32, uint32, uint32)) bool {
+// matchResult contains match result with debug info
+type matchResult struct {
+	matched   bool
+	failRate  float64
+	maxDiff   float64
+}
+
+func match(screenImg, templateImg image.Image, sx, sy int, tolerance float64, getRgbAndAlpha func(image.Image, int, int) (uint32, uint32, uint32, uint32)) matchResult {
 	tBounds := templateImg.Bounds()
-	
+	totalPixels := 0
+	failedPixels := 0
+	maxDiff := 0.0
+
 	for ty := 0; ty < tBounds.Dy(); ty++ {
 		for tx := 0; tx < tBounds.Dx(); tx++ {
 			tr, tg, tb, ta := getRgbAndAlpha(templateImg, tBounds.Min.X+tx, tBounds.Min.Y+ty)
-			
+
 			// Skip transparent pixels in template (act as wildcard)
 			if ta == 0 {
 				continue
 			}
-			
+
+			totalPixels++
 			sr, sg, sb, _ := getRgbAndAlpha(screenImg, sx+tx, sy+ty)
 
-			if !colorSimilar(sr, sg, sb, tr, tg, tb, tolerance) {
-				return false
+			diff := math.Sqrt(float64((sr-tr)*(sr-tr) + (sg-tg)*(sg-tg) + (sb-tb)*(sb-tb)))
+			if diff > maxDiff {
+				maxDiff = diff
+			}
+
+			// Early exit if any pixel exceeds MaxPixelDiff (completely wrong match)
+			if diff > constants.MaxPixelDiff {
+				return matchResult{matched: false, failRate: float64(failedPixels) / float64(totalPixels), maxDiff: maxDiff}
+			}
+
+			if diff > tolerance {
+				failedPixels++
+				// Early exit if fail rate already exceeds threshold
+				if float64(failedPixels)/float64(totalPixels) > constants.MaxFailRate && totalPixels > 100 {
+					return matchResult{matched: false, failRate: float64(failedPixels) / float64(totalPixels), maxDiff: maxDiff}
+				}
 			}
 		}
 	}
-	return true
+
+	// Final check: allow up to MaxFailRate of pixels to fail
+	if totalPixels == 0 {
+		return matchResult{matched: false, failRate: 1.0, maxDiff: 0}
+	}
+	failRate := float64(failedPixels) / float64(totalPixels)
+	return matchResult{matched: failRate <= constants.MaxFailRate, failRate: failRate, maxDiff: maxDiff}
 }

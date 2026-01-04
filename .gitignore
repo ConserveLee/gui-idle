@@ -11,6 +11,7 @@ bin/
 .vscode/
 *.swp
 .claude
+*.md
 
 # OS
 .DS_Store
